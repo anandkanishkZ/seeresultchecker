@@ -7,22 +7,21 @@ export const config = {
 export default async function handler(
   request: VercelRequest,
   response: VercelResponse,
-) {
+): Promise<void> {
   try {
     // Dynamically import the server entry point
-    const { default: serverEntry } = await import(
-      "../dist/server/index.js"
-    ) as any;
+    const serverEntry = (await import("../dist/server/index.js")) as any;
 
     if (!serverEntry || typeof serverEntry.fetch !== "function") {
-      return response.status(500).json({
+      response.status(500).json({
         error: "Server entry not found",
       });
+      return;
     }
 
     // Create a Web API Request from Vercel request
-    const protocol = request.headers["x-forwarded-proto"] || "https";
-    const host = request.headers["x-forwarded-host"] || request.headers.host;
+    const protocol = (request.headers["x-forwarded-proto"] as string) || "https";
+    const host = (request.headers["x-forwarded-host"] as string) || request.headers.host;
     const url = new URL(`${protocol}://${host}${request.url}`);
 
     let body: BodyInit | undefined;
@@ -41,7 +40,7 @@ export default async function handler(
 
     // Convert Web API Response to Vercel response
     response.status(webResponse.status);
-    webResponse.headers.forEach((value, key) => {
+    webResponse.headers.forEach((value: string, key: string) => {
       response.setHeader(key, value);
     });
 
