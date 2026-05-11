@@ -11,11 +11,16 @@ export default async function handler(
   try {
     // Dynamically import the server entry point
     // @ts-expect-error - dist/server/index.js is a generated file without type declarations
-    const serverEntry = (await import("../dist/server/index.js")) as any;
+    const serverModule = (await import("../dist/server/index.js")) as any;
+    
+    const serverEntry = serverModule.default || serverModule;
 
     if (!serverEntry || typeof serverEntry.fetch !== "function") {
+      console.error("Server entry:", serverEntry);
       response.status(500).json({
-        error: "Server entry not found",
+        error: "Server entry not found or invalid",
+        has_default: !!serverModule.default,
+        has_fetch: !!serverEntry?.fetch,
       });
       return;
     }
