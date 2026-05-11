@@ -10,6 +10,7 @@ export default async function handler(
 ): Promise<void> {
   try {
     // Dynamically import the server entry point
+    // @ts-expect-error - dist/server/index.js is a generated file without type declarations
     const serverEntry = (await import("../dist/server/index.js")) as any;
 
     if (!serverEntry || typeof serverEntry.fetch !== "function") {
