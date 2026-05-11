@@ -1,30 +1,39 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 
+export const config = {
+  runtime: "nodejs18.x",
+};
+
 export default async function handler(
   request: VercelRequest,
   response: VercelResponse,
 ) {
   try {
-    // Import the server entry point
-    const serverModule = await import("../dist/server/index.js");
-    const serverEntry = serverModule.default;
+    // Dynamically import the server entry point
+    const { default: serverEntry } = await import(
+      "../dist/server/index.js"
+    ) as any;
+
+    if (!serverEntry || typeof serverEntry.fetch !== "function") {
+      return response.status(500).json({
+        error: "Server entry not found",
+      });
+    }
 
     // Create a Web API Request from Vercel request
-    const url = new URL(request.url || "/", `https://${request.headers.host}`);
+    const protocol = request.headers["x-forwarded-proto"] || "https";
+    const host = request.headers["x-forwarded-host"] || request.headers.host;
+    const url = new URL(`${protocol}://${host}${request.url}`);
+
+    let body: BodyInit | undefined;
+    if (request.method !== "GET" && request.method !== "HEAD") {
+      body = JSON.stringify(request.body || {});
+    }
+
     const webRequest = new Request(url, {
       method: request.method,
-      headers: request.headers as HeadersInit,
-      body:
-        request.method === "GET" || request.method === "HEAD"
-          ? undefined
-          : Buffer.from(await new Promise<Buffer>((resolve, reject) => {
-              let data = Buffer.alloc(0);
-              request.on("data", (chunk) => {
-                data = Buffer.concat([data, chunk]);
-              });
-              request.on("end", () => resolve(data));
-              request.on("error", reject);
-            })),
+      headers: new Headers(request.headers as Record<string, string>),
+      body,
     });
 
     // Call the server entry
@@ -36,7 +45,12 @@ export default async function handler(
       response.setHeader(key, value);
     });
 
-    response.send(await webResponse.text());
+    if (webResponse.body) {
+      const text = await webResponse.text();
+      response.send(text);
+    } else {
+      response.end();
+    }
   } catch (error) {
     console.error("Server error:", error);
     response.status(500).json({
